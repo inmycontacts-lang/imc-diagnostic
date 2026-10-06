@@ -140,13 +140,14 @@ with tabs[0]:
         zc2.markdown(f"### {z['zone_n1'][0]}")
 
     st.markdown("##### Indicateurs clés — projection 2026 (N+1)")
-    k = st.columns(6)
-    k[0].metric("Chiffre d'affaires", dt(L["ca"][3]))
-    k[1].metric("EBE / EBITDA", dt(L["ebe"][3]))
-    k[2].metric("Résultat net", dt(L["rn"][3]))
-    k[3].metric("Trésorerie nette", dt(L["treso"][3]))
-    k[4].metric("Marge d'EBE", pct(R["ebe"][3]))
-    k[5].metric("Capacité remb.", num(R["cap"][3], " ans"))
+    r1 = st.columns(3)
+    r1[0].metric("Chiffre d'affaires", dt(L["ca"][3]))
+    r1[1].metric("EBE / EBITDA", dt(L["ebe"][3]))
+    r1[2].metric("Résultat net", dt(L["rn"][3]))
+    r2 = st.columns(3)
+    r2[0].metric("Trésorerie nette", dt(L["treso"][3]))
+    r2[1].metric("Marge d'EBE", pct(R["ebe"][3]))
+    r2[2].metric("Capacité remb.", num(R["cap"][3], " ans"))
 
     st.markdown("##### 🚨 Top 5 alertes & recommandations")
     for state, txt in res["alerts"]:
