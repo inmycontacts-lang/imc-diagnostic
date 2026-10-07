@@ -39,7 +39,10 @@ st.markdown(f"""
   .a-safe {{ background:{GREEN_BG}; color:{GREEN}; }}
   .a-warn {{ background:{AMBER_BG}; color:{AMBER}; }}
   .a-danger {{ background:{RED_BG}; color:{RED}; }}
-  [data-testid="stMetricValue"] {{ color:{NAVY}; font-weight:700; }}
+  [data-testid="stMetricValue"] {{ color:{NAVY}; font-weight:700; font-size:1.6rem; line-height:1.25;
+      white-space:nowrap; overflow:visible; }}
+  [data-testid="stMetricLabel"] {{ white-space:normal; }}
+  @media (max-width:680px) {{ [data-testid="stMetricValue"] {{ font-size:1.15rem; }} }}
   .stTabs [data-baseweb="tab-list"] {{ gap: 4px; }}
   .stTabs [data-baseweb="tab"] {{ background:#F4F6F9; border-radius:8px 8px 0 0; padding:8px 14px; }}
   .stTabs [aria-selected="true"] {{ background:{NAVY}; color:white; }}
