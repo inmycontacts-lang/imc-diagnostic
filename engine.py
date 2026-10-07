@@ -392,3 +392,84 @@ def whatif(res, d_dso=0, d_marge=0.0, d_croiss=0.0):
     cp1=cp_n+rn1*(1-h["tdiv"])
     stressed=cp1+df1-ai1-bfr1
     return dict(base=base, stressed=stressed, impact=stressed-base)
+
+
+# ============================================================================
+# ANALYSE NARRATIVE AUTOMATIQUE (par règles — zéro coût, pas de LLM)
+# ============================================================================
+def _fr(x, dec=0):
+    s = f"{x:,.{dec}f}".replace(",", " ").replace(".", ",")
+    return s
+
+def build_narrative(res):
+    """Génère un commentaire rédigé du diagnostic à partir des chiffres.
+    Retourne un dict de sections prêtes à afficher."""
+    R = res["ratios"]; L = res["lines"]; i = 3
+    sc = res["score"]; z = res["zscore"]; v = res["valo"]
+    ca = L["ca"][i]; ebe = L["ebe"][i]; rn = L["rn"][i]; tre = L["treso"][i]
+    croiss = res["hyp"]["croiss"]
+
+    note = sc["note"]
+    # --- Synthèse d'ouverture
+    tone = {"EXCELLENT":"très solide","BON":"saine","FRAGILE":"fragile","CRITIQUE":"préoccupante"}[note]
+    synth = (f"Avec un score de santé financière de {sc['global_']}/100 ({note}), "
+             f"l'entreprise présente une situation {tone} sur l'exercice projeté (N+1). "
+             f"Le chiffre d'affaires atteint {_fr(ca)} DT pour un EBE de {_fr(ebe)} DT "
+             f"({_fr(R['ebe'][i]*100,1)} % du CA) et un résultat net de {_fr(rn)} DT. "
+             f"Le risque de défaillance (Z''-score d'Altman = {_fr(z['n1'],2)}) situe l'entreprise en {z['zone_n1'][0]}.")
+
+    # --- Forces (statut vert)
+    forces = []
+    if R["ebe"][i] >= 0.15: forces.append(f"une rentabilité d'exploitation solide ({_fr(R['ebe'][i]*100,1)} % d'EBE)")
+    if R["auto"][i] >= 0.40: forces.append(f"une structure financière robuste (autonomie {_fr(R['auto'][i]*100,1)} %)")
+    if tre >= 0.05*ca: forces.append(f"une trésorerie confortable ({_fr(tre)} DT)")
+    if R["cap"][i] <= 2: forces.append(f"un endettement maîtrisé ({_fr(R['cap'][i],1)} ans d'EBE)")
+    if R["cov"][i] >= 5: forces.append(f"des charges financières largement couvertes ({_fr(R['cov'][i],1)}x)")
+    if R["roce"][i] >= 0.12: forces.append(f"un bon rendement des capitaux (ROCE {_fr(R['roce'][i]*100,1)} %)")
+    if not forces: forces.append("peu de points forts marqués à ce stade — la priorité est au redressement des fondamentaux")
+
+    # --- Vigilances (statut orange/rouge)
+    vig = []
+    if tre < 0: vig.append(f"🔴 trésorerie nette négative ({_fr(tre)} DT) — risque de rupture de liquidité")
+    elif tre < 0.05*ca: vig.append(f"🟡 trésorerie juste ({_fr(tre)} DT, < 5 % du CA)")
+    if R["ebe"][i] < 0.08: vig.append(f"🔴 rentabilité d'exploitation insuffisante ({_fr(R['ebe'][i]*100,1)} %)")
+    elif R["ebe"][i] < 0.15: vig.append(f"🟡 marge d'EBE perfectible ({_fr(R['ebe'][i]*100,1)} %)")
+    if R["dso"][i] > 60: vig.append(f"🔴 délai clients élevé ({_fr(R['dso'][i])} j) — trésorerie immobilisée")
+    elif R["dso"][i] > 45: vig.append(f"🟡 délai clients à optimiser ({_fr(R['dso'][i])} j)")
+    if R["cap"][i] > 3.5: vig.append(f"🔴 endettement lourd ({_fr(R['cap'][i],1)} ans d'EBE)")
+    if R["auto"][i] < 0.25: vig.append(f"🔴 sous-capitalisation (autonomie {_fr(R['auto'][i]*100,1)} %)")
+    elif R["auto"][i] < 0.40: vig.append(f"🟡 autonomie financière moyenne ({_fr(R['auto'][i]*100,1)} %)")
+    if R["ccc"][i] > 60: vig.append(f"🟡 cycle d'exploitation long ({_fr(R['ccc'][i])} j)")
+    if not vig: vig.append("🟢 aucun point de vigilance majeur — les grands équilibres sont respectés")
+
+    # --- Priorités (3 leviers chiffrés tirés du plan d'action)
+    prio = []
+    gain_dso = max(0, R["dso"][i]-45) * ca / 365
+    if gain_dso > 1000:
+        prio.append(f"Ramener le délai clients à 45 j libérerait environ {_fr(gain_dso)} DT de trésorerie.")
+    if R["ebe"][i] < 0.15:
+        prio.append(f"Gagner 2 points de marge brute représenterait ~{_fr(0.02*ca)} DT de marge supplémentaire.")
+    if R["cap"][i] > 2.5:
+        prio.append("Renégocier la dette (taux/maturité) allégerait la pression sur la trésorerie.")
+    if not prio:
+        prio.append("Maintenir la discipline actuelle et placer l'excédent de trésorerie.")
+        prio.append("Envisager un plan de croissance : les fondamentaux le permettent.")
+
+    # --- Valorisation
+    valo_txt = (f"Sur la base des flux projetés, la valeur des capitaux propres est estimée entre "
+                f"{_fr(v['low'])} et {_fr(v['high'])} DT (moyenne {_fr(v['avg'])} DT), "
+                f"selon les méthodes DCF et multiple d'EBE.")
+
+    # --- Conclusion orientée conseil IMC
+    if note in ("EXCELLENT","BON"):
+        concl = ("L'entreprise dispose de bases saines pour accélérer. L'enjeu : structurer la croissance "
+                 "et valoriser cette performance. IMC peut accompagner le plan de développement et le pilotage.")
+    elif note == "FRAGILE":
+        concl = ("La situation appelle une consolidation avant toute accélération. "
+                 "Un accompagnement sur le BFR et la rentabilité sécuriserait la trajectoire — c'est le cœur du conseil IMC.")
+    else:
+        concl = ("La situation exige des mesures correctives rapides. Un plan de redressement structuré "
+                 "(trésorerie, dette, rentabilité) est prioritaire. IMC peut le bâtir et le piloter avec vous.")
+
+    return dict(synthese=synth, forces=forces, vigilances=vig,
+                priorites=prio, valorisation=valo_txt, conclusion=concl)

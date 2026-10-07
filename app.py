@@ -4,19 +4,28 @@ OUTIL DE DIAGNOSTIC FINANCIER IMC — Application web (Streamlit)
 Démo interactive : le dirigeant ajuste ses hypothèses et voit le diagnostic se recalculer en direct.
 Auteur : Nizar SALAH — IMC   •   Lancer : streamlit run app.py
 """
+import os
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 import engine as E
+import exporter as X
 
 # ============================ CONFIG & CHARTE IMC ============================
-NAVY, TURQ, GOLD = "#1C2A4A", "#3DB9BC", "#C9A961"
+# Couleurs exactes du logo In My Contacts
+NAVY, TURQ, GOLD = "#1B2A49", "#3DB9BB", "#C9A961"
 GREEN, AMBER, RED = "#1E7E34", "#9C6500", "#B02A37"
 GREEN_BG, AMBER_BG, RED_BG = "#D4EDDA", "#FFF3CD", "#F8D7DA"
+LOGO = os.path.join(os.path.dirname(__file__), "logo_imc.png")
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 st.set_page_config(page_title="Diagnostic Financier IMC", page_icon="📊", layout="wide",
                    initial_sidebar_state="expanded")
+try:
+    st.logo(LOGO, size="large")
+except Exception:
+    pass
 
 st.markdown(f"""
 <style>
@@ -56,7 +65,11 @@ def alert_html(state, txt):
 
 # ============================ SIDEBAR : INPUTS ============================
 ss = st.session_state
-st.sidebar.markdown(f"### 📊 Diagnostic Financier **IMC**")
+try:
+    st.sidebar.image(LOGO, width=250)
+except Exception:
+    st.sidebar.markdown("### Diagnostic Financier IMC")
+st.sidebar.markdown("**Diagnostic Financier & Pilotage**")
 st.sidebar.caption("Ajuste les paramètres — tout se recalcule en direct.")
 
 scen = st.sidebar.selectbox("🎛️ Scénario", list(E.SCENARIOS.keys()),
@@ -91,10 +104,30 @@ LINE_LABELS = [("ca","Chiffre d'affaires"),("ach","Achats consommés"),("cext","
                ("is_","Impôt (IS)"),("ai","Actif immobilisé"),("stk","Stocks"),("cre","Créances clients"),
                ("four","Dettes fournisseurs"),("cp","Capitaux propres"),("df","Dettes financières"),
                ("capex","CapEx"),("emp","Nouvel emprunt"),("remb","Remboursement"),("div","Dividendes")]
-with st.sidebar.expander("📥 Données de l'entreprise (2023 → 2025)"):
-    base_df = pd.DataFrame({lbl: E.DEFAULT_HIST[k] for k, lbl in LINE_LABELS},
+
+# ---- Import Excel ----
+with st.sidebar.expander("📂 Importer / Exporter (Excel)"):
+    st.download_button("📄 Modèle de saisie (vierge)", data=X.make_template(),
+                       file_name="Modele_Saisie_IMC.xlsx", mime=XLSX_MIME, width="stretch")
+    up = st.file_uploader("Importer vos données (.xlsx)", type=["xlsx"])
+    if up is not None:
+        imp, msg = X.read_template(up)
+        sig = f"{up.name}:{up.size}"
+        if imp is None:
+            st.error(msg)
+        else:
+            if ss.get("last_up") != sig:
+                ss["imported_hist"] = imp
+                ss["import_rev"] = ss.get("import_rev", 0) + 1
+                ss["last_up"] = sig
+            st.success("Importé — " + msg)
+    st.caption("Astuce : téléchargez le modèle, remplacez par vos chiffres, puis réimportez-le.")
+
+seed = ss.get("imported_hist", E.DEFAULT_HIST)
+with st.sidebar.expander("📝 Données de l'entreprise (2023 → 2025)"):
+    base_df = pd.DataFrame({lbl: seed[k] for k, lbl in LINE_LABELS},
                            index=["2023", "2024", "2025"]).T
-    edited = st.data_editor(base_df, width="stretch", key="data_editor")
+    edited = st.data_editor(base_df, width="stretch", key=f"data_editor_{ss.get('import_rev',0)}")
     hist = {k: [float(edited.loc[lbl, y]) for y in ["2023", "2024", "2025"]] for k, lbl in LINE_LABELS}
 
 # ============================ CALCUL ============================
@@ -104,16 +137,23 @@ res = E.compute_model(hist=hist, hyp=hyp, val=val)
 L, R, SC = res["lines"], res["ratios"], res["score"]
 YRS = res["years"]
 
+# ---- Export Excel (après calcul) ----
+with st.sidebar.expander("⬇️ Exporter le diagnostic"):
+    st.download_button("Rapport Excel (.xlsx)", data=X.export_report(res, scen, sector),
+                       file_name="Diagnostic_Financier_IMC.xlsx", mime=XLSX_MIME, width="stretch")
+    st.caption("Synthèse + Données + Ratios + Valorisation, aux couleurs IMC.")
+
 # ============================ EN-TÊTE ============================
 st.markdown('<div class="imc-band">📊 Diagnostic Financier & Pilotage Stratégique</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="imc-sub">Scénario : <b>{scen}</b> &nbsp;•&nbsp; Secteur : {sector} &nbsp;•&nbsp; Outil IMC — Nizar SALAH</div>', unsafe_allow_html=True)
 st.write("")
 
-tabs = st.tabs(["📊 Dashboard", "📈 Ratios", "🗓️ Prévision mensuelle", "🎯 Simulation",
-                "💰 Valorisation", "🤝 Conseil IMC"])
+tab_dash, tab_synth, tab_ratios, tab_prev, tab_sim, tab_valo, tab_cons = st.tabs(
+    ["📊 Tableau de bord", "🧠 Synthèse", "📈 Ratios", "🗓️ Prévision mensuelle",
+     "🎯 Simulation", "💰 Valorisation", "🤝 Conseil IMC"])
 
 # ---------------------------- DASHBOARD ----------------------------
-with tabs[0]:
+with tab_dash:
     c1, c2 = st.columns([1, 1.3])
     with c1:
         col = GREEN if SC["global_"] >= 65 else (AMBER if SC["global_"] >= 50 else RED)
@@ -169,8 +209,37 @@ with tabs[0]:
                           yaxis_ticksuffix="%", legend=dict(orientation="h", y=-0.2))
         st.plotly_chart(fig, width="stretch")
 
+# ---------------------------- SYNTHÈSE (analyse automatique) ----------------------------
+with tab_synth:
+    nar = E.build_narrative(res)
+    st.markdown("##### 🧠 Analyse automatique du diagnostic")
+    st.caption("Commentaire généré à partir de vos chiffres — une lecture de dirigeant, en clair.")
+    colA, colB, colC = st.columns(3)
+    colA.metric("Score de santé", f"{SC['global_']}/100", SC["note"])
+    colB.metric("Risque de défaillance", num(res["zscore"]["n1"]), res["zscore"]["zone_n1"][0])
+    colC.metric("Valorisation moyenne", dt(res["valo"]["avg"]))
+    st.markdown(f"<div class='alert a-safe' style='background:#eef5fb;color:{NAVY}'>{nar['synthese']}</div>",
+                unsafe_allow_html=True)
+    cf, cv = st.columns(2)
+    with cf:
+        st.markdown("**✅ Points forts**")
+        for f in nar["forces"]:
+            st.markdown(f"- {f}")
+    with cv:
+        st.markdown("**⚠️ Points de vigilance**")
+        for g in nar["vigilances"]:
+            st.markdown(f"- {g}")
+    st.markdown("**🎯 Priorités**")
+    for p in nar["priorites"]:
+        st.markdown(f"- {p}")
+    st.markdown("**💰 Valorisation**")
+    st.write(nar["valorisation"])
+    st.markdown(f"<div class='cta' style='text-align:left;font-size:.95rem'>💡 {nar['conclusion']}</div>",
+                unsafe_allow_html=True)
+    st.caption("Analyse indicative, générée automatiquement — elle ne remplace pas un accompagnement personnalisé.")
+
 # ---------------------------- RATIOS ----------------------------
-with tabs[1]:
+with tab_ratios:
     groups = [
         ("Rentabilité & performance", [("mb","Marge brute",pct),("ebe","Marge EBE",pct),("net","Marge nette",pct),
             ("roe","ROE",pct),("roce","ROCE",pct),("pm","Point mort (j)",lambda v:num(v,' j'))]),
@@ -216,7 +285,7 @@ with tabs[1]:
     st.plotly_chart(fig, width="stretch")
 
 # ---------------------------- PRÉVISION MENSUELLE ----------------------------
-with tabs[2]:
+with tab_prev:
     m = E.compute_monthly(res)
     k = st.columns(3)
     k[0].metric("Trésorerie minimale", dt(m["tmin"]), help="Point bas de l'année")
@@ -240,7 +309,7 @@ with tabs[2]:
                "Hypothèses : HT, charges fixes/IS/CapEx lissés sur 12 mois, décalages = DSO/DPO arrondis au mois.")
 
 # ---------------------------- SIMULATION ----------------------------
-with tabs[3]:
+with tab_sim:
     st.markdown("##### Analyse « Et si… » — impact sur la trésorerie N+1")
     c = st.columns(3)
     d_dso = c[0].slider("Δ DSO (jours)", -30, 60, 15, 1)
@@ -265,7 +334,7 @@ with tabs[3]:
     st.caption("Vert = trésorerie confortable · Rouge = tension. La frontière orange ≈ point d'équilibre (trésorerie nulle).")
 
 # ---------------------------- VALORISATION ----------------------------
-with tabs[4]:
+with tab_valo:
     v = res["valo"]
     st.markdown("##### Estimation de la valeur des capitaux propres")
     k = st.columns(3)
@@ -294,7 +363,7 @@ with tabs[4]:
     st.caption(f"Hypothèses : WACC {pct(wacc)}, g {pct(gg)}, multiple {num(mult,'x')}. Condition : WACC > g.")
 
 # ---------------------------- CONSEIL IMC ----------------------------
-with tabs[5]:
+with tab_cons:
     st.markdown("##### 🤝 Consultation selon votre cas — recommandations en temps réel")
     st.caption("Ce diagnostic, vous l'avez fait seul. L'étape suivante — le plan d'action et sa mise en œuvre — "
                "est le métier d'IMC, sans la lourdeur ni les honoraires d'un grand cabinet.")
