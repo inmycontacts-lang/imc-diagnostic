@@ -47,15 +47,22 @@ def _save_gsheets(lead):
     if "gcp_service_account" not in st.secrets or "gsheet_url" not in st.secrets:
         raise RuntimeError("secrets manquants")
 
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets",
+              "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(
         dict(st.secrets["gcp_service_account"]), scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_url(st.secrets["gsheet_url"])
     ws = sh.sheet1
-    # en-têtes si feuille vide
-    if ws.row_count == 0 or not ws.acell("A1").value:
-        ws.update("A1", [HEADERS])
+    # En-têtes si la 1re ligne est vide — via append_row (compatible gspread 5 ET 6).
+    # NB : ws.update("A1", [HEADERS]) plantait en gspread 6.x (ordre des arguments
+    # inversé : update(values, range_name)) → c'était la cause de la perte des leads.
+    try:
+        first_row = ws.row_values(1)
+    except Exception:
+        first_row = []
+    if not first_row:
+        ws.append_row(HEADERS, value_input_option="USER_ENTERED")
     ws.append_row(_row_from_lead(lead), value_input_option="USER_ENTERED")
     return True
 
@@ -79,9 +86,11 @@ def save_lead(lead):
         _save_gsheets(lead)
         return True, "gsheets", "Enregistré dans Google Sheets."
     except Exception as e:
+        detail = "%s: %s" % (type(e).__name__, str(e)[:160])
         try:
             _save_csv(lead)
-            return True, "csv", ("Google Sheets non configuré — enregistré en local "
-                                 "(⚠️ éphémère sur Streamlit Cloud). Détail : %s" % type(e).__name__)
+            return True, "csv", ("Google Sheets indisponible — enregistré en local "
+                                 "(⚠️ éphémère sur Streamlit Cloud). Détail : " + detail)
         except Exception as e2:
-            return False, "none", "Échec de l'enregistrement : %s" % e2
+            return False, "none", ("Échec total de l'enregistrement — " + detail +
+                                   " | CSV : " + str(e2)[:120])

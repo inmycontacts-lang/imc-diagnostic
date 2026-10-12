@@ -108,6 +108,8 @@ def render_360():
                 ss["lead_360"] = lead
                 if mode == "csv":
                     st.warning("Analyse débloquée. (Note admin : " + msg + ")")
+                elif mode == "none":
+                    st.error("Analyse débloquée. (Note admin — lead NON enregistré : " + msg + ")")
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
         st.info("🔎 Aperçu gratuit affiché ci-dessus. L'analyse détaillée et le rapport PDF se débloquent "
@@ -191,6 +193,8 @@ def render_annuaire():
     st.markdown("### 📝 Demande de référencement")
     if ss.get("annuaire_sent"):
         st.success("✅ Votre demande est enregistrée. L'équipe IMC vous recontacte pour finaliser votre fiche.")
+        if ss.get("annuaire_mode") and ss["annuaire_mode"] != "gsheets":
+            st.caption("Note admin : enregistrement en mode « %s » (voir configuration Google Sheets)." % ss["annuaire_mode"])
     else:
         with st.form("annuaire_form"):
             a, b = st.columns(2)
@@ -211,7 +215,8 @@ def render_annuaire():
                 lead = dict(prenom=contact.strip(), nom="", entreprise=ent.strip(), secteur=sect,
                             telephone=tel.strip(), email=email.strip(), score_global="",
                             pilier_faible=f"ANNUAIRE — {formule}", scores="", consent=consent)
-                LEADS.save_lead(lead)
+                ok, mode, msg = LEADS.save_lead(lead)
                 ss["annuaire_sent"] = True
+                ss["annuaire_mode"] = mode
                 st.rerun()
     st.markdown(f'<div class="coord">{CONTACT}</div>', unsafe_allow_html=True)

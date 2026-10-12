@@ -134,8 +134,8 @@ CATALOGUE = [
     ]},
     {"icon": "📢", "famille": "Marketing, SEO & Réseaux Sociaux", "offres": [
         ("Audit & Stratégie SEO / Google My Business", "sur devis"),
-        ("Management complet des réseaux sociaux", "Essentiel 50 / Premium 150 / Élite 350 Dt /mois"),
-        ("Campagne Sponsoring (Meta / Google Ads)", "dès 1 500 DT / mois"),
+        ("Management complet des réseaux sociaux", "Essentiel 390 · Premium 690 · Élite 1 190 DT / mois"),
+        ("Campagne Sponsoring gérée (Meta / Google Ads)", "dès 1 500 DT / mois (budget média inclus)"),
     ]},
     {"icon": "💼", "famille": "Développement Commercial & CRM", "offres": [
         ("Mise en place de CRM & automatisation de prospection", "sur devis"),
@@ -185,7 +185,7 @@ def compute_360(answers):
 
 
 def recommend_services(res360):
-    """Liste de (pilier_nom, score, [services]) pour les piliers < 60 %, pire d'abord."""
+    """Liste de (pilier_nom, icon, score, [services]) pour les piliers < 60 %, pire d'abord."""
     out = []
     for r in sorted(res360["pillars"], key=lambda x: x["score"]):
         if r["score"] < 60:
