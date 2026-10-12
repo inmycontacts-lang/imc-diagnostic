@@ -94,3 +94,46 @@ def save_lead(lead):
         except Exception as e2:
             return False, "none", ("Échec total de l'enregistrement — " + detail +
                                    " | CSV : " + str(e2)[:120])
+
+
+def diagnose_gsheets():
+    """Diagnostic Google Sheets SANS fallback CSV : renvoie (ok, info).
+    N'expose JAMAIS la clé privée — seulement l'URL, le client_email, le titre du
+    classeur réellement atteint et le nb de lignes, ou l'exception exacte."""
+    info = {}
+    try:
+        import streamlit as st
+    except Exception as e:
+        return False, {"streamlit_error": repr(e)}
+    try:
+        info["gcp_service_account_present"] = "gcp_service_account" in st.secrets
+        info["gsheet_url_present"] = "gsheet_url" in st.secrets
+        if info["gsheet_url_present"]:
+            info["gsheet_url"] = str(st.secrets["gsheet_url"])
+        if info["gcp_service_account_present"]:
+            info["client_email"] = dict(st.secrets["gcp_service_account"]).get("client_email", "?")
+    except Exception as e:
+        return False, {"secrets_error": "%s: %s" % (type(e).__name__, str(e)[:200])}
+    if not info.get("gcp_service_account_present") or not info.get("gsheet_url_present"):
+        info["error"] = "Secret manquant : gcp_service_account et/ou gsheet_url absent des Secrets."
+        return False, info
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        scopes = ["https://www.googleapis.com/auth/spreadsheets",
+                  "https://www.googleapis.com/auth/drive"]
+        creds = Credentials.from_service_account_info(
+            dict(st.secrets["gcp_service_account"]), scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_url(st.secrets["gsheet_url"])
+        info["spreadsheet_title"] = sh.title
+        ws = sh.sheet1
+        info["worksheet_title"] = ws.title
+        try:
+            info["rows_before"] = len(ws.get_all_values())
+        except Exception:
+            info["rows_before"] = "?"
+        return True, info
+    except Exception as e:
+        info["error"] = "%s: %s" % (type(e).__name__, str(e)[:300])
+        return False, info

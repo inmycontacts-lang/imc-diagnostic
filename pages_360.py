@@ -38,6 +38,24 @@ def render_360():
     st.markdown("Répondez aux questions ci-dessous. Votre **score de maturité** et vos "
                 "**axes de progrès** s'affichent immédiatement.")
 
+    # ---------------- DIAGNOSTIC ADMIN (caché) : ouvrir l'app avec ?diag=1 ----------------
+    try:
+        _diag = st.query_params.get("diag")
+    except Exception:
+        _diag = None
+    if _diag == "1":
+        with st.expander("🔧 Diagnostic Google Sheets (admin)", expanded=True):
+            ok, info = LEADS.diagnose_gsheets()
+            st.write("Connexion Google Sheets OK :", ok)
+            st.json(info)
+            if st.button("✍️ Écrire une ligne test dans le Sheet"):
+                ok2, mode2, msg2 = LEADS.save_lead(dict(
+                    ts=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    prenom="DIAG", nom="TEST", entreprise="DIAG QA", secteur="Services",
+                    telephone="0", email="diag@imc.tn", score_global=1,
+                    pilier_faible="DIAG", scores="", consent=True))
+                st.write({"ok": ok2, "mode": mode2, "message": msg2})
+
     # ---------------- QUESTIONNAIRE ----------------
     answers = {}
     for p in C.PILLARS:
@@ -106,10 +124,8 @@ def render_360():
                 ok, mode, msg = LEADS.save_lead(lead)
                 ss["unlocked_360"] = True
                 ss["lead_360"] = lead
-                if mode == "csv":
-                    st.warning("Analyse débloquée. (Note admin : " + msg + ")")
-                elif mode == "none":
-                    st.error("Analyse débloquée. (Note admin — lead NON enregistré : " + msg + ")")
+                ss["lead_save_mode"] = mode
+                ss["lead_save_msg"] = msg
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
         st.info("🔎 Aperçu gratuit affiché ci-dessus. L'analyse détaillée et le rapport PDF se débloquent "
@@ -120,6 +136,10 @@ def render_360():
     lead = ss.get("lead_360", {})
     st.success(f"✅ Analyse débloquée pour **{lead.get('entreprise','votre entreprise')}**. "
                "Votre plan d'action est ci-dessous.")
+    _mode = ss.get("lead_save_mode")
+    if _mode and _mode != "gsheets":
+        st.warning("Note admin : lead enregistré en mode « %s » (PAS dans Google Sheets). %s"
+                   % (_mode, ss.get("lead_save_msg", "")))
 
     st.markdown("### 📊 Détail par pilier")
     for p in res360["pillars"]:
