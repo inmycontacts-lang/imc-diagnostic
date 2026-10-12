@@ -38,19 +38,35 @@ def _row_from_lead(lead):
     ]
 
 
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets",
+          "https://www.googleapis.com/auth/drive"]
+
+
+def _service_account_info():
+    """Infos du compte de service depuis les Secrets.
+    Priorité à gcp_service_account_b64 (base64 du JSON — INSENSIBLE aux problèmes de
+    formatage de la clé privée), sinon la section TOML gcp_service_account."""
+    import streamlit as st
+    import json as _json, base64 as _b64
+    if "gcp_service_account_b64" in st.secrets:
+        raw = _b64.b64decode(str(st.secrets["gcp_service_account_b64"]))
+        return _json.loads(raw)
+    if "gcp_service_account" in st.secrets:
+        return dict(st.secrets["gcp_service_account"])
+    raise RuntimeError("Aucun compte de service dans les Secrets "
+                       "(ni gcp_service_account_b64 ni gcp_service_account).")
+
+
 def _save_gsheets(lead):
     """Tente l'enregistrement dans Google Sheets. Renvoie True si OK, lève sinon."""
     import streamlit as st
     import gspread
     from google.oauth2.service_account import Credentials
 
-    if "gcp_service_account" not in st.secrets or "gsheet_url" not in st.secrets:
-        raise RuntimeError("secrets manquants")
+    if "gsheet_url" not in st.secrets:
+        raise RuntimeError("gsheet_url manquant dans les Secrets")
 
-    scopes = ["https://www.googleapis.com/auth/spreadsheets",
-              "https://www.googleapis.com/auth/drive"]
-    creds = Credentials.from_service_account_info(
-        dict(st.secrets["gcp_service_account"]), scopes=scopes)
+    creds = Credentials.from_service_account_info(_service_account_info(), scopes=SCOPES)
     gc = gspread.authorize(creds)
     sh = gc.open_by_url(st.secrets["gsheet_url"])
     ws = sh.sheet1
@@ -106,24 +122,29 @@ def diagnose_gsheets():
     except Exception as e:
         return False, {"streamlit_error": repr(e)}
     try:
-        info["gcp_service_account_present"] = "gcp_service_account" in st.secrets
+        info["methode_base64"] = "gcp_service_account_b64" in st.secrets
+        info["methode_toml"] = "gcp_service_account" in st.secrets
         info["gsheet_url_present"] = "gsheet_url" in st.secrets
         if info["gsheet_url_present"]:
             info["gsheet_url"] = str(st.secrets["gsheet_url"])
-        if info["gcp_service_account_present"]:
-            info["client_email"] = dict(st.secrets["gcp_service_account"]).get("client_email", "?")
     except Exception as e:
         return False, {"secrets_error": "%s: %s" % (type(e).__name__, str(e)[:200])}
-    if not info.get("gcp_service_account_present") or not info.get("gsheet_url_present"):
-        info["error"] = "Secret manquant : gcp_service_account et/ou gsheet_url absent des Secrets."
+    try:
+        sa = _service_account_info()
+        info["client_email"] = sa.get("client_email", "?")
+        pk = sa.get("private_key", "")
+        info["private_key_ok"] = bool(pk.startswith("-----BEGIN PRIVATE KEY-----")
+                                      and pk.rstrip().endswith("-----END PRIVATE KEY-----"))
+    except Exception as e:
+        info["error"] = "compte_service : %s: %s" % (type(e).__name__, str(e)[:250])
+        return False, info
+    if not info.get("gsheet_url_present"):
+        info["error"] = "gsheet_url absent des Secrets."
         return False, info
     try:
         import gspread
         from google.oauth2.service_account import Credentials
-        scopes = ["https://www.googleapis.com/auth/spreadsheets",
-                  "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(
-            dict(st.secrets["gcp_service_account"]), scopes=scopes)
+        creds = Credentials.from_service_account_info(sa, scopes=SCOPES)
         gc = gspread.authorize(creds)
         sh = gc.open_by_url(st.secrets["gsheet_url"])
         info["spreadsheet_title"] = sh.title
