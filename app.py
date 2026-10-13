@@ -5,7 +5,7 @@ Lead magnet : diagnostic gratuit → capture de leads → recommandations de ser
 Auteur : Nizar SALAH — IMC   •   Lancer : streamlit run app.py
 """
 import streamlit as st
-from theme import CSS, LOGO, CONTACT
+from theme import CSS, LOGO, CONTACT, CONTACT_HTML
 
 st.set_page_config(page_title="Diagnostic 360° IMC", page_icon="🎯", layout="wide",
                    initial_sidebar_state="expanded")
@@ -36,6 +36,7 @@ nav = st.navigation(PAGES)
 # Pied de barre latérale : contact permanent
 st.sidebar.divider()
 st.sidebar.caption("📞 Un expert IMC vous accompagne :")
-st.sidebar.caption(CONTACT)
+st.sidebar.markdown(f"<div style='font-size:.8rem;color:#5A6473;line-height:1.5'>{CONTACT_HTML}</div>",
+                    unsafe_allow_html=True)
 
 nav.run()

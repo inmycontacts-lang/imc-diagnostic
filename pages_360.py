@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import content_360 as C
 import leads as LEADS
 import report360 as RP
-from theme import NAVY, TURQ, GOLD, GREEN, AMBER, RED, maturity_label, CONTACT
+from theme import NAVY, TURQ, GOLD, GREEN, AMBER, RED, maturity_label, CONTACT, CONTACT_HTML, PRIVACY_NOTE
 
 PDF_MIME = "application/pdf"
 
@@ -25,8 +25,8 @@ def _radar(res360):
                                   name="Votre entreprise", line_color=TURQ))
     fig.add_trace(go.Scatterpolar(r=[60] * (len(cats) + 1), theta=cats + [cats[0]],
                                   name="Seuil recommandé (60%)", line=dict(color=GOLD, dash="dot")))
-    fig.update_layout(height=420, polar=dict(radialaxis=dict(range=[0, 100])),
-                      legend=dict(orientation="h", y=-0.12), margin=dict(t=20, l=40, r=40))
+    fig.update_layout(height=430, polar=dict(radialaxis=dict(range=[0, 100])),
+                      legend=dict(orientation="h", y=-0.12), margin=dict(t=55, l=85, r=85, b=45))
     return fig
 
 
@@ -38,12 +38,15 @@ def render_360():
     st.markdown("Répondez aux questions ci-dessous. Votre **score de maturité** et vos "
                 "**axes de progrès** s'affichent immédiatement.")
 
-    # ---------------- DIAGNOSTIC ADMIN (caché) : ouvrir l'app avec ?diag=1 ----------------
+    # ---------------- DIAGNOSTIC ADMIN (protégé par token) ----------------
+    # Visible seulement si un secret "diag_token" est défini ET que l'URL contient
+    # ?diag=<ce token>. Sans ce secret, le panneau n'apparaît jamais (sécurisé par défaut).
     try:
         _diag = st.query_params.get("diag")
+        _tok = str(st.secrets["diag_token"]) if "diag_token" in st.secrets else None
     except Exception:
-        _diag = None
-    if _diag == "1":
+        _diag, _tok = None, None
+    if _tok and _diag and _diag == _tok:
         with st.expander("🔧 Diagnostic Google Sheets (admin)", expanded=True):
             ok, info = LEADS.diagnose_gsheets()
             st.write("Connexion Google Sheets OK :", ok)
@@ -81,7 +84,7 @@ def render_360():
             gauge={"axis": {"range": [0, 100]}, "bar": {"color": col},
                    "steps": [{"range": [0, 40], "color": "#F8D7DA"}, {"range": [40, 60], "color": "#FFF3CD"},
                              {"range": [60, 100], "color": "#D4EDDA"}]}))
-        fig.update_layout(height=260, margin=dict(l=20, r=20, t=40, b=0),
+        fig.update_layout(height=270, margin=dict(l=30, r=30, t=55, b=10),
                           title={"text": f"Score global — <b>{lab}</b>", "font": {"color": NAVY}})
         st.plotly_chart(fig, width="stretch")
     with c2:
@@ -93,14 +96,18 @@ def render_360():
         st.markdown("### 🔒 Débloquez votre analyse détaillée")
         st.markdown("Recevez l'**analyse complète par pilier**, votre **plan d'action personnalisé** et le "
                     "**rapport PDF**. Renseignez vos coordonnées — un expert IMC peut vous rappeler.")
+        with st.expander("🔒 Confidentialité de vos données (loi n°2004-63)"):
+            st.caption(PRIVACY_NOTE)
         with st.form("lead_form", clear_on_submit=False):
-            a, b = st.columns(2)
-            prenom = a.text_input("Prénom *")
-            nom = b.text_input("Nom *")
-            entreprise = a.text_input("Entreprise *")
-            secteur = b.selectbox("Secteur d'activité *", C.SECTEURS)
-            telephone = a.text_input("Téléphone *")
-            email = b.text_input("E-mail *")
+            r1a, r1b = st.columns(2)
+            prenom = r1a.text_input("Prénom *")
+            nom = r1b.text_input("Nom *")
+            r2a, r2b = st.columns(2)
+            entreprise = r2a.text_input("Entreprise *")
+            secteur = r2b.selectbox("Secteur d'activité *", C.SECTEURS)
+            r3a, r3b = st.columns(2)
+            telephone = r3a.text_input("Téléphone *")
+            email = r3b.text_input("E-mail *")
             consent = st.checkbox("J'accepte d'être recontacté par IMC et que mes données soient "
                                   "traitées à cette fin (conformément à la réglementation).")
             submitted = st.form_submit_button("🔓 Débloquer mon analyse complète", type="primary")
@@ -172,9 +179,10 @@ def render_360():
     except Exception as e:
         st.info("Le rapport PDF sera disponible sous peu. (" + type(e).__name__ + ")")
 
-    st.markdown('<div class="cta">📞 Besoin d\'aide pour appliquer ce plan ? Prenez RDV avec un expert '
-                'In My Contacts.</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="coord">{CONTACT}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cta">📞 Besoin d\'aide pour appliquer ce plan ? '
+                '<a href="mailto:inmycontacts@gmail.com?subject=Mon%20Diagnostic%20360%20IMC">'
+                'Écrivez à un expert In My Contacts</a>.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="coord">{CONTACT_HTML}</div>', unsafe_allow_html=True)
     if st.button("↩️ Recommencer le diagnostic"):
         ss["unlocked_360"] = False
         st.rerun()
@@ -188,9 +196,10 @@ def render_catalogue():
         for titre, prix in fam["offres"]:
             st.markdown(f'<div class="svc"><h4>{titre}</h4>'
                         f'<span class="price">{prix}</span></div>', unsafe_allow_html=True)
-    st.markdown('<div class="cta">➡️ Un besoin précis ? Parlons-en — devis gratuit sous 48h.</div>',
-                unsafe_allow_html=True)
-    st.markdown(f'<div class="coord">{CONTACT}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cta">➡️ Un besoin précis ? '
+                '<a href="mailto:inmycontacts@gmail.com?subject=Demande%20de%20devis%20IMC">'
+                'Parlons-en — devis gratuit sous 48h</a>.</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="coord">{CONTACT_HTML}</div>', unsafe_allow_html=True)
 
 
 def render_annuaire():
@@ -216,14 +225,18 @@ def render_annuaire():
         if ss.get("annuaire_mode") and ss["annuaire_mode"] != "gsheets":
             st.caption("Note admin : enregistrement en mode « %s » (voir configuration Google Sheets)." % ss["annuaire_mode"])
     else:
+        with st.expander("🔒 Confidentialité de vos données (loi n°2004-63)"):
+            st.caption(PRIVACY_NOTE)
         with st.form("annuaire_form"):
-            a, b = st.columns(2)
-            ent = a.text_input("Entreprise *")
-            sect = b.selectbox("Secteur *", C.SECTEURS)
-            contact = a.text_input("Nom du contact *")
-            email = b.text_input("E-mail *")
-            tel = a.text_input("Téléphone")
-            formule = b.selectbox("Formule souhaitée", [f[0] for f in C.ANNUAIRE["formules"]])
+            r1a, r1b = st.columns(2)
+            ent = r1a.text_input("Entreprise *")
+            sect = r1b.selectbox("Secteur *", C.SECTEURS)
+            r2a, r2b = st.columns(2)
+            contact = r2a.text_input("Nom du contact *")
+            email = r2b.text_input("E-mail *")
+            r3a, r3b = st.columns(2)
+            tel = r3a.text_input("Téléphone")
+            formule = r3b.selectbox("Formule souhaitée", [f[0] for f in C.ANNUAIRE["formules"]])
             consent = st.checkbox("J'accepte d'être recontacté par IMC à propos de l'annuaire.")
             sent = st.form_submit_button("Envoyer ma demande", type="primary")
         if sent:
@@ -239,4 +252,4 @@ def render_annuaire():
                 ss["annuaire_sent"] = True
                 ss["annuaire_mode"] = mode
                 st.rerun()
-    st.markdown(f'<div class="coord">{CONTACT}</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="coord">{CONTACT_HTML}</div>', unsafe_allow_html=True)

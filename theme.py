@@ -11,6 +11,18 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 CONTACT = ("Nizar SALAH — IMC  •  inmycontacts@gmail.com  •  WhatsApp +216 24 423 506  "
            "•  linkedin.com/in/nizar-salah-7ab3b9125")
 
+CONTACT_HTML = ('Nizar SALAH — IMC &nbsp;•&nbsp; '
+                '<a href="mailto:inmycontacts@gmail.com">inmycontacts@gmail.com</a> &nbsp;•&nbsp; '
+                '<a href="https://wa.me/21624423506" target="_blank">WhatsApp +216 24 423 506</a> &nbsp;•&nbsp; '
+                '<a href="https://www.linkedin.com/in/nizar-salah-7ab3b9125" target="_blank">LinkedIn</a>')
+
+PRIVACY_NOTE = (
+    "Vos données (nom, entreprise, téléphone, e-mail) sont collectées par In My Contacts (IMC) "
+    "dans le seul but de vous recontacter au sujet de votre diagnostic et des services IMC. "
+    "Elles ne sont ni vendues ni cédées à des tiers. Conformément à la loi tunisienne n°2004-63 "
+    "relative à la protection des données personnelles, vous disposez d'un droit d'accès, de "
+    "rectification et de suppression en écrivant à inmycontacts@gmail.com.")
+
 CSS = f"""
 <style>
   .block-container {{ padding-top: 1.2rem; padding-bottom: 2rem; }}
@@ -47,6 +59,8 @@ CSS = f"""
   .price {{ color:{TURQ}; font-weight:700; }}
   .badge-vip {{ background:{GOLD}; color:{NAVY}; padding:2px 10px; border-radius:999px;
           font-size:.72rem; font-weight:700; }}
+  .coord a {{ color:{NAVY}; font-weight:700; text-decoration:underline; }}
+  .cta a, .cta-gold a {{ color:#FFE39A; font-weight:700; text-decoration:underline; }}
 </style>
 """
 
