@@ -7,7 +7,6 @@ INTÉGRATION LEAD : voir la fonction `enregistrer_lead()` plus bas (un seul endr
 à brancher sur votre pipeline Google Sheet existant — aucun secret dupliqué ici).
 """
 import io
-from datetime import datetime
 
 import pandas as pd
 import streamlit as st
@@ -16,8 +15,6 @@ from dd_tbi_content import (
     BLOCS, GLOSSAIRE, STATUTS, TODO, NAVY, TURQ, GOLD,
     score_bloc, score_global, pourcentage, verdict,
 )
-
-st.set_page_config(page_title="Due Diligence TBI — IMC", page_icon="🛡️", layout="wide")
 
 # --------------------------------------------------------------------------
 # Thème IMC (inline, pour rester autonome même sans config.toml)
@@ -46,7 +43,7 @@ st.info("ℹ️ Outil d'aide à la décision — **ne constitue pas un avis juri
 # --------------------------------------------------------------------------
 # INTÉGRATION LEAD — à brancher sur votre pipeline existant
 # --------------------------------------------------------------------------
-def enregistrer_lead(nom, email, societe, score_pct, verdict_txt):
+def enregistrer_lead(nom, email, societe, score_pct, verdict_txt, consent):
     """
     Enregistre le lead via le pipeline existant : leads.save_lead() écrit dans le
     Google Sheet « IMC Leads 360 » (fallback CSV). Aucun secret n'est dupliqué ici,
@@ -60,6 +57,7 @@ def enregistrer_lead(nom, email, societe, score_pct, verdict_txt):
             "email": email,
             "score_global": score_pct,
             "pilier_faible": f"DD TBI — {verdict_txt}",
+            "consent": consent,
         })
         if not ok:
             st.warning(f"Lead non enregistré : {msg}")
@@ -136,14 +134,18 @@ with st.form("lead_dd_tbi"):
     nom = cc1.text_input("Nom *")
     email = cc2.text_input("Email *")
     societe = cc3.text_input("Société")
+    consent = st.checkbox("J'accepte d'être recontacté par IMC et que mes données soient "
+                          "traitées à cette fin (conformément à la réglementation).")
     ok = st.form_submit_button("Générer le rapport")
 
 if ok:
     if not nom or not email:
         st.error("Merci d'indiquer au moins votre nom et votre email.")
+    elif not consent:
+        st.error("Merci de cocher la case de consentement pour continuer.")
     else:
         enregistrer_lead(nom, email, societe,
-                         f"{p_tot*100:.0f}%" if p_tot is not None else "—", v_txt)
+                         f"{p_tot*100:.0f}%" if p_tot is not None else "—", v_txt, consent)
         st.success("Rapport prêt — téléchargez-le ci-dessous.")
         detail = pd.DataFrame(
             [{"Réf": ref, "Point de contrôle": lib, "Poids": poids, "Statut": statuts[ref]}
