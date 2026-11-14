@@ -48,21 +48,22 @@ st.info("ℹ️ Outil d'aide à la décision — **ne constitue pas un avis juri
 # --------------------------------------------------------------------------
 def enregistrer_lead(nom, email, societe, score_pct, verdict_txt):
     """
-    >>> À PERSONNALISER <<<
-    Remplacez le corps par votre fonction de capture existante, p.ex. :
-        from <votre_module_lead> import save_lead
-        save_lead({"nom": nom, "email": email, "societe": societe,
-                   "source": "DD TBI", "score": score_pct, "verdict": verdict_txt})
-    N'importez jamais ici les secrets du service account : réutilisez la fonction déjà en place.
+    Enregistre le lead via le pipeline existant : leads.save_lead() écrit dans le
+    Google Sheet « IMC Leads 360 » (fallback CSV). Aucun secret n'est dupliqué ici,
+    save_lead lit lui-même st.secrets. Un échec reste non bloquant.
     """
     try:
-        # TODO: appel réel au pipeline Google Sheet "IMC Leads 360"
-        st.session_state.setdefault("_leads_dd_tbi", []).append({
-            "horodatage": datetime.now().isoformat(timespec="seconds"),
-            "nom": nom, "email": email, "societe": societe,
-            "score": score_pct, "verdict": verdict_txt,
+        from leads import save_lead
+        ok, mode, msg = save_lead({
+            "nom": nom,
+            "entreprise": societe,
+            "email": email,
+            "score_global": score_pct,
+            "pilier_faible": f"DD TBI — {verdict_txt}",
         })
-        return True
+        if not ok:
+            st.warning(f"Lead non enregistré : {msg}")
+        return ok
     except Exception as e:  # noqa: BLE001
         st.warning(f"Lead non enregistré : {e}")
         return False
