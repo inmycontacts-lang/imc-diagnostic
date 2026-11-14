@@ -29,6 +29,7 @@ PAGES = [
     st.Page(render_catalogue, title="Catalogue Services IMC", icon="📖"),
     st.Page(render_annuaire, title="Annuaire Pro IMC", icon="📘"),
     st.Page(render_financial, title="Diagnostic Financier (expert)", icon="💶"),
+    st.Page("pages/5_Due_Diligence_TBI.py", title="Due Diligence TBI", icon="🛡️"),
 ]
 
 nav = st.navigation(PAGES)
