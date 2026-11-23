@@ -19,6 +19,7 @@ token_uri = "https://oauth2.googleapis.com/token"
 Partager le Google Sheet en "Éditeur" avec le client_email du compte de service.
 """
 import os
+import re
 import csv
 from datetime import datetime
 
@@ -26,6 +27,13 @@ HEADERS = ["Horodatage", "Prénom", "Nom", "Entreprise", "Secteur", "Téléphone
            "Score global", "Pilier le plus faible", "Scores détaillés", "Consentement"]
 
 CSV_PATH = os.path.join(os.path.dirname(__file__), "leads_local.csv")
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def valid_email(email):
+    """Validation e-mail réelle (format), en remplacement du test faible « @ et . »."""
+    return bool(_EMAIL_RE.match((email or "").strip()))
 
 
 def _row_from_lead(lead):
@@ -71,15 +79,38 @@ def _save_gsheets(lead):
     sh = gc.open_by_url(st.secrets["gsheet_url"])
     ws = sh.sheet1
     # En-têtes si la 1re ligne est vide — via append_row (compatible gspread 5 ET 6).
-    # NB : ws.update("A1", [HEADERS]) plantait en gspread 6.x (ordre des arguments
-    # inversé : update(values, range_name)) → c'était la cause de la perte des leads.
     try:
         first_row = ws.row_values(1)
     except Exception:
         first_row = []
     if not first_row:
         ws.append_row(HEADERS, value_input_option="USER_ENTERED")
-    ws.append_row(_row_from_lead(lead), value_input_option="USER_ENTERED")
+        first_row = list(HEADERS)
+
+    row = _row_from_lead(lead)
+    email = (lead.get("email") or "").strip().lower()
+
+    # Déduplication par e-mail : si l'e-mail existe déjà, on MET À JOUR la ligne
+    # existante au lieu de créer un doublon.
+    existing_idx = None
+    if email:
+        email_col = (first_row.index("Email") + 1) if "Email" in first_row else 7
+        try:
+            col_vals = ws.col_values(email_col)  # col_vals[0] = en-tête
+            for i, v in enumerate(col_vals[1:], start=2):  # lignes de données (1-based)
+                if (v or "").strip().lower() == email:
+                    existing_idx = i
+                    break
+        except Exception:
+            existing_idx = None
+
+    if existing_idx:
+        # gspread 6.x : arguments en MOTS-CLÉS pour éviter l'inversion values/range_name
+        # (ordre inversé en v6 — cause historique de la perte de leads).
+        ws.update(values=[row], range_name="A%d" % existing_idx,
+                  value_input_option="USER_ENTERED")
+    else:
+        ws.append_row(row, value_input_option="USER_ENTERED")
     return True
 
 

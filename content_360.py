@@ -168,26 +168,32 @@ SECTEURS = ["Services", "Commerce / Négoce", "Industrie", "BTP / Construction",
 
 
 def score_pillar(answers, pillar):
-    """Moyenne des scores des réponses d'un pilier (0..100)."""
-    vals = [answers.get(q[0], 50) for q in pillar["questions"]]
-    return round(sum(vals) / len(vals)) if vals else 0
+    """Moyenne des scores des réponses RÉELLEMENT données d'un pilier (0..100).
+    Renvoie None si aucune question du pilier n'a été répondue (plus de défaut à 50 %)."""
+    vals = [answers[q[0]] for q in pillar["questions"] if answers.get(q[0]) is not None]
+    return round(sum(vals) / len(vals)) if vals else None
 
 
 def compute_360(answers):
-    """Renvoie {global, pillars:[{key,nom,icon,score}], faibles:[keys<60]}."""
+    """Renvoie {global, pillars:[{key,nom,icon,score}], faibles, answered}.
+    Le score global est calculé UNIQUEMENT sur les piliers ayant au moins une réponse
+    (score None = non répondu) ; il vaut None tant qu'aucune réponse n'est donnée.
+    NB : un diagnostic ENTIÈREMENT répondu est noté exactement comme avant."""
     rows = []
     for p in PILLARS:
         sc = score_pillar(answers, p)
         rows.append({"key": p["key"], "nom": p["nom"], "icon": p["icon"], "score": sc})
-    glob = round(sum(r["score"] for r in rows) / len(rows)) if rows else 0
-    faibles = [r for r in rows if r["score"] < 60]
-    return {"global": glob, "pillars": rows, "faibles": faibles}
+    scored = [r["score"] for r in rows if r["score"] is not None]
+    glob = round(sum(scored) / len(scored)) if scored else None
+    faibles = [r for r in rows if r["score"] is not None and r["score"] < 60]
+    return {"global": glob, "pillars": rows, "faibles": faibles, "answered": len(scored)}
 
 
 def recommend_services(res360):
     """Liste de (pilier_nom, icon, score, [services]) pour les piliers < 60 %, pire d'abord."""
     out = []
-    for r in sorted(res360["pillars"], key=lambda x: x["score"]):
+    answered = [r for r in res360["pillars"] if r["score"] is not None]
+    for r in sorted(answered, key=lambda x: x["score"]):
         if r["score"] < 60:
             out.append((r["nom"], r["icon"], r["score"], PILLAR_SERVICES.get(r["key"], [])))
     return out
