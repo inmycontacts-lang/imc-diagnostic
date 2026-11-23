@@ -9,7 +9,7 @@ FONT_R = os.path.join(HERE, "DejaVuSans.ttf")
 FONT_B = os.path.join(HERE, "DejaVuSans-Bold.ttf")
 LOGO = os.path.join(HERE, "logo_imc.png")
 
-NAVY = (27, 42, 73); TURQ = (61, 185, 187); GOLD = (201, 169, 97)
+NAVY = (28, 42, 74); TURQ = (61, 185, 188); GOLD = (201, 169, 97)
 GREEN = (30, 126, 52); AMBER = (156, 101, 0); RED = (176, 42, 55)
 GREY = (90, 100, 115); LIGHT = (244, 246, 249)
 

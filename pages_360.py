@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import content_360 as C
 import leads as LEADS
 import report360 as RP
+import analytics as ANALYTICS
 from theme import NAVY, TURQ, GOLD, GREEN, AMBER, RED, maturity_label, CONTACT, CONTACT_HTML, PRIVACY_NOTE
 
 PDF_MIME = "application/pdf"
@@ -19,7 +20,7 @@ def _band(title, sub):
 
 def _radar(res360):
     cats = [p["nom"].split(" & ")[0].split(" (")[0] for p in res360["pillars"]]
-    vals = [p["score"] for p in res360["pillars"]]
+    vals = [(p["score"] if p["score"] is not None else 0) for p in res360["pillars"]]
     fig = go.Figure()
     fig.add_trace(go.Scatterpolar(r=vals + [vals[0]], theta=cats + [cats[0]], fill="toself",
                                   name="Votre entreprise", line_color=TURQ))
@@ -32,6 +33,9 @@ def _radar(res360):
 
 def render_360():
     ss = st.session_state
+    if not ss.get("_ev_start360"):
+        ANALYTICS.track("start_diagnostic")
+        ss["_ev_start360"] = True
     _band("🎯 Diagnostic Stratégique 360°",
           "Évaluez la maturité de votre entreprise sur 6 piliers — gratuit, en 5 minutes.")
 
@@ -66,13 +70,21 @@ def render_360():
             st.caption(p["intro"])
             for qkey, qlabel, opts in p["questions"]:
                 labels = [o[0] for o in opts]
-                choice = st.radio(qlabel, labels, index=1, key=f"q_{qkey}")
-                answers[qkey] = dict(opts)[choice]
+                # index=None : aucune réponse pré-sélectionnée (supprime le biais du score par défaut)
+                choice = st.radio(qlabel, labels, index=None, key=f"q_{qkey}")
+                if choice is not None:
+                    answers[qkey] = dict(opts)[choice]
 
     res360 = C.compute_360(answers)
     ss["res360"] = res360
 
     st.divider()
+
+    # Aucune réponse encore → pas de score biaisé ni de gate (ex-défaut « 50/100 Fragile »)
+    if res360["global"] is None:
+        st.info("👉 Répondez aux questions ci-dessus pour afficher votre score de maturité "
+                "et vos axes de progrès.")
+        return
 
     # ---------------- APERÇU GRATUIT ----------------
     g = res360["global"]
@@ -112,23 +124,26 @@ def render_360():
                                   "traitées à cette fin (conformément à la réglementation).")
             submitted = st.form_submit_button("🔓 Débloquer mon analyse complète", type="primary")
         if submitted:
+            ANALYTICS.track("unlock_click")
             missing = not all([prenom.strip(), nom.strip(), entreprise.strip(), telephone.strip(), email.strip()])
             if missing:
                 st.error("Merci de renseigner tous les champs obligatoires (*).")
-            elif "@" not in email or "." not in email:
+            elif not LEADS.valid_email(email):
                 st.error("Merci de saisir une adresse e-mail valide.")
             elif not consent:
                 st.error("Merci de cocher la case de consentement pour continuer.")
             else:
-                pires = sorted(res360["pillars"], key=lambda x: x["score"])
+                _answered = [p for p in res360["pillars"] if p["score"] is not None]
+                pires = sorted(_answered, key=lambda x: x["score"]) or res360["pillars"]
                 lead = dict(
                     ts=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     prenom=prenom.strip(), nom=nom.strip(), entreprise=entreprise.strip(),
                     secteur=secteur, telephone=telephone.strip(), email=email.strip(),
                     score_global=g, pilier_faible=pires[0]["nom"],
-                    scores="; ".join(f"{p['nom'].split(' &')[0]}:{p['score']}%" for p in res360["pillars"]),
+                    scores="; ".join(f"{p['nom'].split(' &')[0]}:{p['score'] if p['score'] is not None else '—'}%" for p in res360["pillars"]),
                     consent=consent)
                 ok, mode, msg = LEADS.save_lead(lead)
+                ANALYTICS.track("lead_submit", score=g, mode=mode)
                 ss["unlocked_360"] = True
                 ss["lead_360"] = lead
                 ss["lead_save_mode"] = mode
@@ -150,6 +165,12 @@ def render_360():
 
     st.markdown("### 📊 Détail par pilier")
     for p in res360["pillars"]:
+        if p["score"] is None:
+            st.markdown(
+                f'<div class="pcard"><h4>{p["icon"]} {p["nom"]} — '
+                f'<span style="color:#5A6473">non répondu</span></h4></div>',
+                unsafe_allow_html=True)
+            continue
         plab, pcol, pstate = maturity_label(p["score"])
         st.markdown(
             f'<div class="pcard"><h4>{p["icon"]} {p["nom"]} — '
@@ -182,6 +203,9 @@ def render_360():
     st.markdown('<div class="cta">📞 Besoin d\'aide pour appliquer ce plan ? '
                 '<a href="mailto:inmycontacts@gmail.com?subject=Mon%20Diagnostic%20360%20IMC">'
                 'Écrivez à un expert In My Contacts</a>.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cta-gold" style="margin-top:8px">💬 Plus rapide sur WhatsApp ? '
+                '<a href="https://wa.me/21624423506?text=Bonjour%20IMC%2C%20je%20viens%20de%20faire%20mon%20Diagnostic%20360%20et%20je%20souhaite%20en%20discuter" '
+                'target="_blank">Discuter avec un expert sur WhatsApp</a></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="coord">{CONTACT_HTML}</div>', unsafe_allow_html=True)
     if st.button("↩️ Recommencer le diagnostic"):
         ss["unlocked_360"] = False
@@ -199,6 +223,9 @@ def render_catalogue():
     st.markdown('<div class="cta">➡️ Un besoin précis ? '
                 '<a href="mailto:inmycontacts@gmail.com?subject=Demande%20de%20devis%20IMC">'
                 'Parlons-en — devis gratuit sous 48h</a>.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="cta-gold" style="margin-top:8px">💬 '
+                '<a href="https://wa.me/21624423506?text=Bonjour%20IMC%2C%20je%20souhaite%20un%20devis" '
+                'target="_blank">Demander un devis sur WhatsApp</a></div>', unsafe_allow_html=True)
     st.markdown(f'<div class="coord">{CONTACT_HTML}</div>', unsafe_allow_html=True)
 
 
@@ -240,7 +267,7 @@ def render_annuaire():
             consent = st.checkbox("J'accepte d'être recontacté par IMC à propos de l'annuaire.")
             sent = st.form_submit_button("Envoyer ma demande", type="primary")
         if sent:
-            if not all([ent.strip(), contact.strip(), email.strip()]) or "@" not in email:
+            if not all([ent.strip(), contact.strip(), email.strip()]) or not LEADS.valid_email(email):
                 st.error("Merci de renseigner l'entreprise, le contact et un e-mail valide.")
             elif not consent:
                 st.error("Merci de cocher la case de consentement.")

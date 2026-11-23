@@ -41,3 +41,8 @@ st.sidebar.markdown(f"<div style='font-size:.8rem;color:#5A6473;line-height:1.5'
                     unsafe_allow_html=True)
 
 nav.run()
+
+# Tracking GA4 : les événements mis en file pendant le rendu des pages sont émis ici
+# (après nav.run()), ce qui survit aux reruns Streamlit.
+import analytics
+analytics.boot()

@@ -2,7 +2,7 @@
 """Thème IMC partagé : couleurs, CSS global, helpers de formatage, chemin logo."""
 import os
 
-NAVY, TURQ, GOLD = "#1B2A49", "#3DB9BB", "#C9A961"
+NAVY, TURQ, GOLD = "#1C2A4A", "#3DB9BC", "#C9A961"
 GREEN, AMBER, RED = "#1E7E34", "#9C6500", "#B02A37"
 GREEN_BG, AMBER_BG, RED_BG = "#D4EDDA", "#FFF3CD", "#F8D7DA"
 LOGO = os.path.join(os.path.dirname(__file__), "logo_imc.png")
